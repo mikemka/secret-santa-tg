@@ -1,6 +1,5 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
-# from utils import get_or_create_user
 from database.models import User
 import settings
 
@@ -16,6 +15,7 @@ async def confirm_registration_callback_handler(callback_query: CallbackQuery):
     user_id = int(callback_query.data.split('-')[-1])
     user = await User.get(id=user_id)
     user.confirmed = True
+    user.status = 'registration-moderation-confirmed'
     await user.save()
     await callback_query.bot.send_message(
         chat_id=user.tg_id,

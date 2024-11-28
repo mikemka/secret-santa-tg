@@ -2,7 +2,7 @@ from aiogram import F, Router
 from aiogram.types import Message
 from aiogram.filters import Command, CommandObject
 from database.actions import get_or_create_user
-from database.models import User
+from database.models import User, Message
 from datetime import datetime
 import keyboards
 import settings
@@ -69,7 +69,7 @@ async def start_event(message: Message, command: CommandObject) -> None:
     async for user in User.filter(confirmed=True):
         await message.bot.send_message(
             chat_id=user.tg_id,
-            text=settings.TEXT_EVENT_STARTED,
+            text=settings.TEXT_EVENT_STARTED.format(user=await User.get(id=user.secret_user_id)),
         )
 
     await message.answer(text=settings.TEXT_ADMIN_START_EVENT_USERS_NOTIFIED)
@@ -84,15 +84,61 @@ async def stop_event(message: Message, command: CommandObject) -> None:
 
     async for user in users:
         try:
-            secret_santa = await User.get(id=user.secret_user_id)
             await message.bot.send_message(
                 chat_id=user.tg_id,
-                text=settings.TEXT_USER_TESTING_MESSAGE,
+                text=settings.TEXT_EVENT_STOPPED.format(user=await User.get(secret_user_id=user.id)),
             )
         except:
             await message.answer(text=f'Заблокировал бота {user.tg_id} {user}')
-            await user.delete()
-            n += 1
+    
+    await message.answer(text=settings.TEXT_ADMIN_STOP_EVENT_USERS_NOTIFIED)
+    
+    await User.all().delete()
+
+
+@router.message(Command(commands=['send_santa']))
+async def send_santa(message: Message, command: CommandObject) -> None:
+    user = await get_or_create_user(message.from_user)
+    if not user.confirmed or not user.secret_user_id:
+        return
+
+    user.status = 'send-santa'
+    await user.save()
+
+    await message.bot.send_message(
+        chat_id=user.tg_id,
+        text=settings.TEXT_MESSAGE_TO_SANTA,
+    )
+
+
+@router.message(Command(commands=['send_recipient']))
+async def send_recipient(message: Message, command: CommandObject) -> None:
+    user = await get_or_create_user(message.from_user)
+    if not user.confirmed or not user.secret_user_id:
+        return
+
+    user.status = 'send-recipient'
+    await user.save()
+
+    await message.bot.send_message(
+        chat_id=user.tg_id,
+        text=settings.TEXT_MESSAGE_TO_RECIPIENT,
+    )
+
+
+@router.message(Command(commands=['cancel']))
+async def cancel_command(message: Message, command: CommandObject) -> None:
+    user = await get_or_create_user(message.from_user)
+    if not user.confirmed or not user.secret_user_id:
+        return
+
+    user.status = ''
+    await user.save()
+
+    await message.bot.send_message(
+        chat_id=user.tg_id,
+        text=settings.TEXT_CANCEL,
+    )
 
 
 @router.message(Command(commands=['id']))
@@ -149,6 +195,44 @@ async def process_registration(message: Message) -> None:
 @router.message()
 async def main_message(message: Message) -> None:
     user = await get_or_create_user(message.from_user)
+
+    if user.status == 'send-santa':
+        santa = await User.get(secret_user_id=user.id)
+        try:
+            await message.bot.send_message(
+                chat_id=santa.tg_id,
+                text=settings.TEXT_MESSAGE_FROM_RECIPIENT.format(message=message.text),
+            )
+        except:
+            await message.answer(text=settings.TEXT_SANTA_BITCH.format(user=santa))
+            await santa.delete()
+            await message.bot.send_message(
+                chat_id=settings.ADMIN_GROUP_ID,
+                text=f'Заблокировал бота\n{settings.TEXT_MODERATION_USER_DATA}'.format(user=santa),
+            )
+        await Message.create(from_user=user, to_user=santa, text=settings.TEXT_MESSAGE_FROM_RECIPIENT.format(message=message.text))
+        user.status = ''
+        await user.save()
+        await message.answer(text=settings.TEXT_MESSAGE_SENT_SUCCESS)
+
+    if user.status == 'send-recipient':
+        recipient = await User.get(id=user.secret_user_id)
+        try:
+            await message.bot.send_message(
+                chat_id=recipient.tg_id,
+                text=settings.TEXT_MESSAGE_FROM_SANTA.format(message=message.text),
+            )
+        except:
+            await message.answer(text=settings.TEXT_RECIPIENT_BITCH.format(user=recipient))
+            await recipient.delete()
+            await message.bot.send_message(
+                chat_id=settings.ADMIN_GROUP_ID,
+                text=f'Заблокировал бота\n{settings.TEXT_MODERATION_USER_DATA}'.format(user=recipient),
+            )
+        await Message.create(from_user=user, to_user=recipient, text=settings.TEXT_MESSAGE_FROM_SANTA.format(message=message.text))
+        user.status = ''
+        await user.save()
+        await message.answer(text=settings.TEXT_MESSAGE_SENT_SUCCESS)
 
     if not settings.REGISTRATION_START_DATE <= datetime.now() <= settings.REGISTRATION_END_DATE:
         await message.answer(text=settings.TEXT_REGISTRATION_CLOSED)
