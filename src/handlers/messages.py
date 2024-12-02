@@ -1,5 +1,5 @@
 from aiogram import F, Router
-from aiogram.types import Message
+from aiogram.types import BufferedInputFile, Message
 from aiogram.filters import Command, CommandObject
 from database.actions import get_or_create_user
 from database.models import User, Message
@@ -24,11 +24,32 @@ async def start(message: Message, command: CommandObject) -> None:
         await message.answer(text=settings.TEXT_REGISTRATION_CLOSED)
         return
 
-    if not user.name:
+    if not user.name and not user.status:
         await message.answer(
             text=settings.TEXT_START.format(user=user),
             reply_markup=keyboards.start_registration,
         )
+    
+    if user.status == 'registration-enter-name':
+        await message.answer(text=settings.TEXT_ENTER_NAME.format(user=user))
+    
+    if user.status == 'registration-enter-surname':
+        await message.answer(text=settings.TEXT_ENTER_SURNAME.format(user=user))
+
+    if user.status == 'registration-enter-additional-info':
+        await message.answer(text=settings.TEXT_ENTER_ADDITIONAL_INFO.format(user=user))
+
+    if user.status == 'registration-send_data':
+        await message.answer(
+            text=settings.TEXT_REGISTRATION_END.format(user=user),
+            reply_markup=keyboards.send_registration_data,
+        )
+    
+    if user.status == 'registration-moderation':
+        await message.answer(text=settings.TEXT_PROCESSING_REGISTRATION.format(user=user))
+    
+    if user.status == 'registration-moderation-confirmed':
+        await message.answer(text=settings.TEXT_REGISTRATION_CONFIRMED)
 
 
 @router.message(Command(commands=['start_event']))
@@ -94,6 +115,61 @@ async def stop_event(message: Message, command: CommandObject) -> None:
     await message.answer(text=settings.TEXT_ADMIN_STOP_EVENT_USERS_NOTIFIED)
     
     await User.all().delete()
+
+
+@router.message(Command(commands=['get_db']))
+async def get_db(message: Message, command: CommandObject) -> None:
+    if message.chat.id != settings.ADMIN_GROUP_ID:
+        return
+
+    users = await User.all().order_by('created_at')
+
+    fields = (
+        'id', 'tg_id', 'tg_username', 'tg_first_name', 'tg_last_name', 'created_at', 'name',
+        'surname', 'additional_info', 'confirmed', 'secret_user_id', 'status',
+    )
+
+    html_table = (
+        f'<thead><tr>{''.join(f'<td><b>{col}</b></td>' for col in fields)}</tr></thead>'
+        f'<tbody>{''.join(f'<tr>{''.join(f'<td>{getattr(user, field)}</td>' for field in fields)}</tr>' for user in users)}</tbody>'
+    )
+    
+    html_document = (
+        '<!doctype html><html lang="ru">'
+        '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<title>Users</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" '
+        'rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">'
+        f'</head><body><div class="p-4"><table class="table table-striped table-hover table-bordered">{html_table}</table></div>'
+        '<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" '
+        'integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script></body></html>'
+    )
+    
+    await message.bot.send_document(
+        chat_id=message.chat.id,
+        document=BufferedInputFile(html_document.encode('utf-8'), 'users.html'),
+        caption='users',
+    )
+    
+
+@router.message(Command(commands=['del_user']))
+async def del_user(message: Message, command: CommandObject) -> None:
+    if message.chat.id != settings.ADMIN_GROUP_ID:
+        return
+    
+    user_id = command.args
+    
+    if user_id is None or not user_id.isdigit():
+        await message.answer('<code>/del_user [tg_id]</code>')
+        return
+    
+    user = await User.get_or_none(tg_id=user_id)
+
+    if user is None:
+        await message.answer('Пользователь не найден')
+        return
+    
+    await user.delete()
+    await message.answer('Пользователь удален')
 
 
 @router.message(Command(commands=['send_santa']))
