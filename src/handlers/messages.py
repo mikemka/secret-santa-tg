@@ -2,7 +2,7 @@ from aiogram import F, Router
 from aiogram.types import BufferedInputFile, Message
 from aiogram.filters import Command, CommandObject
 from database.actions import get_or_create_user
-from database.models import User, ModelMessage
+from database.models import User, Message as ModelMessage
 from datetime import datetime
 import keyboards
 import settings
