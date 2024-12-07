@@ -2,11 +2,11 @@ from aiogram import F, Router
 from aiogram.types import BufferedInputFile, Message
 from aiogram.filters import Command, CommandObject
 from database.actions import get_or_create_user
-from database.models import User, Message
+from database.models import User, ModelMessage
 from datetime import datetime
 import keyboards
 import settings
-from random import shuffle
+from random import choice, shuffle
 
 
 router = Router(name=__name__)
@@ -270,6 +270,9 @@ async def process_registration(message: Message) -> None:
 
 @router.message()
 async def main_message(message: Message) -> None:
+    if message.chat.id == settings.ADMIN_GROUP_ID:
+        return
+
     user = await get_or_create_user(message.from_user)
 
     if user.status == 'send-santa':
@@ -286,10 +289,11 @@ async def main_message(message: Message) -> None:
                 chat_id=settings.ADMIN_GROUP_ID,
                 text=f'Заблокировал бота\n{settings.TEXT_MODERATION_USER_DATA}'.format(user=santa),
             )
-        await Message.create(from_user=user, to_user=santa, text=settings.TEXT_MESSAGE_FROM_RECIPIENT.format(message=message.text))
+        await ModelMessage.create(from_user=user, to_user=santa, text=settings.TEXT_MESSAGE_FROM_RECIPIENT.format(message=message.text))
         user.status = ''
         await user.save()
         await message.answer(text=settings.TEXT_MESSAGE_SENT_SUCCESS)
+        return
 
     if user.status == 'send-recipient':
         recipient = await User.get(id=user.secret_user_id)
@@ -305,10 +309,15 @@ async def main_message(message: Message) -> None:
                 chat_id=settings.ADMIN_GROUP_ID,
                 text=f'Заблокировал бота\n{settings.TEXT_MODERATION_USER_DATA}'.format(user=recipient),
             )
-        await Message.create(from_user=user, to_user=recipient, text=settings.TEXT_MESSAGE_FROM_SANTA.format(message=message.text))
+        await ModelMessage.create(from_user=user, to_user=recipient, text=settings.TEXT_MESSAGE_FROM_SANTA.format(message=message.text))
         user.status = ''
         await user.save()
         await message.answer(text=settings.TEXT_MESSAGE_SENT_SUCCESS)
+        return
+
+    if user.secret_user_id:
+        await message.answer(text=settings.TEXT_EVENT_STARTED)
+        return
 
     if not settings.REGISTRATION_START_DATE <= datetime.now() <= settings.REGISTRATION_END_DATE:
         await message.answer(text=settings.TEXT_REGISTRATION_CLOSED)
