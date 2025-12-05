@@ -1,0 +1,35 @@
+.msg-container {
+    display: flex;
+    width: 100%;
+    margin: 8px 0;
+}
+
+.msg {
+    max-width: 70%;
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 15px;
+    line-height: 1.4;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.msg.santa {
+    background: #e1f5fe;
+    margin-right: auto;
+    border-bottom-left-radius: 4px;
+}
+
+.msg.recipient {
+    background: #c8e6c9;
+    margin-left: auto;
+    border-bottom-right-radius: 4px;
+}
+
+.msg-time {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    opacity: 0.6;
+    text-align: right;
+}
