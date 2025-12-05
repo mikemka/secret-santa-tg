@@ -6,14 +6,15 @@ from database.models import User, Message as ModelMessage
 from datetime import datetime
 import keyboards
 import settings
-from random import choice, shuffle
+from random import shuffle
+from tortoise.expressions import Q
 
 
 router = Router(name=__name__)
 
 
 @router.message(Command(commands=['start', 'help']))
-async def start(message: Message, command: CommandObject) -> None:
+async def start(message: Message) -> None:
     if message.chat.id == settings.ADMIN_GROUP_ID:
         await message.answer(text=settings.TEXT_ADMIN_START)
         return
@@ -52,11 +53,8 @@ async def start(message: Message, command: CommandObject) -> None:
         await message.answer(text=settings.TEXT_REGISTRATION_CONFIRMED)
 
 
-@router.message(Command(commands=['start_event']))
-async def start_event(message: Message, command: CommandObject) -> None:
-    if message.chat.id != settings.ADMIN_GROUP_ID:
-        return
-
+@router.message(Command(commands=['start_event']), F.chat.id == settings.ADMIN_GROUP_ID)
+async def start_event(message: Message) -> None:
     users = User.filter(confirmed=True)
 
     n = 0
@@ -96,11 +94,8 @@ async def start_event(message: Message, command: CommandObject) -> None:
     await message.answer(text=settings.TEXT_ADMIN_START_EVENT_USERS_NOTIFIED)
 
 
-@router.message(Command(commands=['stop_event']))
-async def stop_event(message: Message, command: CommandObject) -> None:
-    if message.chat.id != settings.ADMIN_GROUP_ID:
-        return
-
+@router.message(Command(commands=['stop_event']), F.chat.id == settings.ADMIN_GROUP_ID)
+async def stop_event(message: Message) -> None:
     users = User.filter(confirmed=True)
 
     async for user in users:
@@ -117,11 +112,8 @@ async def stop_event(message: Message, command: CommandObject) -> None:
     await User.all().delete()
 
 
-@router.message(Command(commands=['get_db']))
-async def get_db(message: Message, command: CommandObject) -> None:
-    if message.chat.id != settings.ADMIN_GROUP_ID:
-        return
-
+@router.message(Command(commands=['get_db']), F.chat.id == settings.ADMIN_GROUP_ID)
+async def get_db(message: Message) -> None:
     users = await User.all().order_by('created_at')
 
     fields = (
@@ -139,7 +131,7 @@ async def get_db(message: Message, command: CommandObject) -> None:
         '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         '<title>Users</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" '
         'rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">'
-        f'</head><body><div class="p-4"><table class="table table-striped table-hover table-bordered">{html_table}</table></div>'
+        f'</head><body><div class="p-4"><table class="table table-hover table-bordered">{html_table}</table></div>'
         '<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" '
         'integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script></body></html>'
     )
@@ -150,12 +142,70 @@ async def get_db(message: Message, command: CommandObject) -> None:
         caption='users',
     )
     
+    html_payload = ''
 
-@router.message(Command(commands=['del_user']))
+    for santa in users:
+        # Загружаем получателя (секретного друга)
+        try:
+            recipient = await User.get(id=santa.secret_user_id)
+        except:
+            continue
+
+        html_dialog = (
+            f'<h2 class="pair-title">Santa: {santa}; Recipient: {recipient}</h2>'
+            '<div class="dialog-box">'
+        )
+
+        # Загружаем все сообщения между парой
+        messages = await ModelMessage.filter(
+            Q(from_user=santa, to_user=recipient) |
+            Q(from_user=recipient, to_user=santa)
+        ).order_by('created_at')
+
+        for msg in messages:
+            sender_is_santa = (msg.from_user_id == santa.id)
+
+            html_dialog += (
+                '<div class="msg-container">'
+                f'<div class="msg {"santa" if sender_is_santa else "recipient"}">'
+                f'{msg.text}'
+                f'<span class="msg-time">{msg.created_at.strftime("%Y-%m-%d %H:%M")}</span>'
+                '</div></div>'
+            )
+
+        html_dialog += '</div>'
+        html_payload += html_dialog
+
+
+    html_document = (
+        '<!doctype html><html lang="ru">'
+        '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<title>Messages</title>'
+        '<link href="https://mikemka.github.io/secret-santa-tg/assets/dbStyles.css" rel="stylesheet">'
+        '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">'
+        '</head>'
+        f'<body><div class="p-4"><h1>Messages</h1>{html_payload}</div>'
+        '<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>'
+        '</body></html>'
+    )
+
+    await message.bot.send_document(
+        chat_id=message.chat.id,
+        document=BufferedInputFile(html_document.encode('utf-8'), 'messages.html'),
+        caption='messages',
+    )
+
+
+@router.message(Command(commands=['count_users']), F.chat.id == settings.ADMIN_GROUP_ID)
+async def count_users(message: Message) -> None:
+    await message.answer(
+        f'Пользователей зарегистрировано: {await User.all().count()}\n'
+        f'Пользователей подтвердилось: {await User.filter(confirmed=True).count()}',
+    )
+
+
+@router.message(Command(commands=['del_user']), F.chat.id == settings.ADMIN_GROUP_ID)
 async def del_user(message: Message, command: CommandObject) -> None:
-    if message.chat.id != settings.ADMIN_GROUP_ID:
-        return
-    
     user_id = command.args
     
     if user_id is None or not user_id.isdigit():
@@ -173,7 +223,7 @@ async def del_user(message: Message, command: CommandObject) -> None:
 
 
 @router.message(Command(commands=['send_santa']))
-async def send_santa(message: Message, command: CommandObject) -> None:
+async def send_santa(message: Message) -> None:
     user = await get_or_create_user(message.from_user)
     if not user.confirmed or not user.secret_user_id:
         return
@@ -188,7 +238,7 @@ async def send_santa(message: Message, command: CommandObject) -> None:
 
 
 @router.message(Command(commands=['send_recipient']))
-async def send_recipient(message: Message, command: CommandObject) -> None:
+async def send_recipient(message: Message) -> None:
     user = await get_or_create_user(message.from_user)
     if not user.confirmed or not user.secret_user_id:
         return
@@ -203,7 +253,7 @@ async def send_recipient(message: Message, command: CommandObject) -> None:
 
 
 @router.message(Command(commands=['cancel']))
-async def cancel_command(message: Message, command: CommandObject) -> None:
+async def cancel_command(message: Message) -> None:
     user = await get_or_create_user(message.from_user)
     if not user.confirmed or not user.secret_user_id:
         return
@@ -218,8 +268,8 @@ async def cancel_command(message: Message, command: CommandObject) -> None:
 
 
 @router.message(Command(commands=['id']))
-async def chat_id(message: Message, command: CommandObject) -> None:
-    await message.answer(text=str(message.chat.id))
+async def chat_id(message: Message) -> None:
+    await message.answer(text=f'ID чата: <code>{message.chat.id}</code>\nID пользователя: <code>{message.from_user.id}</code>')
 
 
 @router.message(F.text == settings.TEXT_START_REGISTRATION)
@@ -259,13 +309,19 @@ async def process_registration(message: Message) -> None:
     
     if user.name and user.surname and user.additional_info and user.status == 'registration-send_data' and not user.confirmed:
         await message.answer(text=settings.TEXT_PROCESSING_REGISTRATION)
-        await message.bot.send_message(
+        admin_group_message = await message.bot.send_message(
             chat_id=settings.ADMIN_GROUP_ID,
             text=f'{settings.TEXT_MODERATION_NEW_USER}\n{settings.TEXT_MODERATION_USER_DATA}'.format(user=user),
             reply_markup=await keyboards.create_confirm_reject_registration(user_id=user.id),
         )
         user.status = 'registration-moderation'
         await user.save()
+
+        await message.bot.pin_chat_message(
+            chat_id=settings.ADMIN_GROUP_ID,
+            message_id=admin_group_message.message_id,
+            disable_notification=True,
+        )
 
 
 @router.message()

@@ -5,9 +5,8 @@ from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from database.actions import init_db
 from asyncio import run
-import handlers
+from handlers import routers
 import logging
-import handlers.callback
 from tortoise import Tortoise
 import settings
 import sys
@@ -29,10 +28,7 @@ def run_with_webhooks() -> None:
     
     dp.startup.register(on_startup)
     
-    dp.include_routers(
-        handlers.callback_router,
-        handlers.messages_router,
-    )
+    dp.include_routers(*routers)
     bot = Bot(
         settings.TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
@@ -64,10 +60,7 @@ async def run_with_polling() -> None:
         settings.TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
-    dp.include_routers(
-        handlers.callback_router,
-        handlers.messages_router,
-    )
+    dp.include_routers(*routers)
     await dp.start_polling(bot)
 
 
