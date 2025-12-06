@@ -222,6 +222,62 @@ async def del_user(message: Message, command: CommandObject) -> None:
     await message.answer('Пользователь удален')
 
 
+@router.message(Command(commands=['add_user']), F.chat.id == settings.ADMIN_GROUP_ID)
+async def add_user(message: Message, command: CommandObject) -> None:
+    async def send_help() -> None:
+        await message.answer(
+            '<code>'
+            '/add_user\n'
+            '[tg_id: int]\n'
+            '[tg_username: str | None]\n'
+            '[tg_first_name: str]\n'
+            '[tg_last_name: str | None]\n'
+            '[name: str]\n'
+            '[surname: str]\n'
+            '[additional_info: str]\n'
+            '</code>',
+        )
+
+    data = command.args
+
+    if data is None:
+        await send_help()
+        return
+
+    data = data.strip().split('\n')
+
+    if len(data) != 7:
+        await send_help()
+        return
+
+    user, _ = await User.update_or_create(
+        defaults={
+            'tg_username': data[1] if data[1] != 'None' else None,
+            'tg_first_name': data[2],
+            'tg_last_name': data[3] if data[3] != 'None' else None,
+            'name': data[4],
+            'surname': data[5],
+            'additional_info': data[6],
+            'confirmed': True,
+            'status': 'registration-moderation-confirmed',
+        },
+        tg_id=int(data[0]),
+    )
+
+    await message.answer(
+        f'Пользователь добавлен:\n'
+        f'{user.tg_id=}\n'
+        f'{user.tg_username=}\n'
+        f'{user.tg_first_name=}\n'
+        f'{user.tg_last_name=}\n'
+        f'{user.name=}\n'
+        f'{user.surname=}\n'
+        f'{user.additional_info=}\n'
+        f'{user.confirmed=}\n'
+        f'{user.status=}\n'
+    )
+
+
 @router.message(Command(commands=['send_santa']))
 async def send_santa(message: Message) -> None:
     user = await get_or_create_user(message.from_user)

@@ -4,12 +4,16 @@ from tortoise import Tortoise
 from settings import DB_URL
 
 
-async def init_db():
+async def init_db() -> None:
     await Tortoise.init(
         db_url=DB_URL,
         modules={'models': ['database.models']}
     )
     await Tortoise.generate_schemas()
+
+
+async def shutdown_db() -> None:
+    await Tortoise.close_connections()
 
 
 async def get_or_create_user(from_user: TgUser) -> User:

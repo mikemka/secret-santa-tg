@@ -3,7 +3,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from database.actions import init_db
+from database.actions import init_db, shutdown_db
 from asyncio import run
 from handlers import routers
 import logging
@@ -55,13 +55,20 @@ def run_with_webhooks() -> None:
 
 
 async def run_with_polling() -> None:
-    dp = Dispatcher()
     bot = Bot(
         settings.TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
+    
+    dp = Dispatcher()
     dp.include_routers(*routers)
-    await dp.start_polling(bot)
+    
+    await init_db()
+    
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await shutdown_db()
 
 
 if __name__ == '__main__':
@@ -69,8 +76,8 @@ if __name__ == '__main__':
         level=logging.INFO if settings.DEBUG else logging.WARNING,
         stream=sys.stdout,
     )
-    run(init_db())
     if settings.USE_WEBHOOK:
+        run(init_db())
         run_with_webhooks()
     else:
         run(run_with_polling())
