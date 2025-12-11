@@ -25,8 +25,8 @@ class User(Model):
 
 
 class Message(Model):
-    from_user = fields.ForeignKeyField('models.User', on_delete=fields.CASCADE, related_name='message_from_user')
-    to_user = fields.ForeignKeyField('models.User', on_delete=fields.CASCADE, related_name='message_to_user')
+    from_user = fields.ForeignKeyField('models.User', null=True, on_delete=fields.SET_NULL, related_name='message_from_user')
+    to_user = fields.ForeignKeyField('models.User', null=True, on_delete=fields.SET_NULL, related_name='message_to_user')
     text = fields.TextField()
     created_at = fields.DatetimeField(auto_now_add=True)
 
