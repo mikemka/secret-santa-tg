@@ -20,6 +20,10 @@ async def start(message: Message) -> None:
         return
 
     user = await get_or_create_user(message.from_user)
+    
+    if user.confirmed and settings.REGISTRATION_START_DATE <= datetime.now() <= settings.REGISTRATION_END_DATE:
+        await message.answer(text=settings.TEXT_EVENT_STARTED.format(user=await User.get(id=user.secret_user_id)))
+        return
 
     if not settings.REGISTRATION_START_DATE <= datetime.now() <= settings.REGISTRATION_END_DATE:
         await message.answer(text=settings.TEXT_REGISTRATION_CLOSED)
@@ -393,8 +397,10 @@ async def main_message(message: Message) -> None:
             await message.bot.send_message(
                 chat_id=santa.tg_id,
                 text=settings.TEXT_MESSAGE_FROM_RECIPIENT.format(message=message.text),
+                parse_mode=None,
             )
-        except:
+        except Exception as e:
+            print(e)
             await message.answer(text=settings.TEXT_SANTA_BITCH.format(user=santa))
             await santa.delete()
             await message.bot.send_message(
@@ -413,8 +419,10 @@ async def main_message(message: Message) -> None:
             await message.bot.send_message(
                 chat_id=recipient.tg_id,
                 text=settings.TEXT_MESSAGE_FROM_SANTA.format(message=message.text),
+                parse_mode=None,
             )
-        except:
+        except Exception as e:
+            print(e)
             await message.answer(text=settings.TEXT_RECIPIENT_BITCH.format(user=recipient))
             await recipient.delete()
             await message.bot.send_message(

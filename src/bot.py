@@ -7,7 +7,6 @@ from database.actions import init_db, shutdown_db
 from asyncio import run
 from handlers import routers
 import logging
-from tortoise import Tortoise
 import settings
 import sys
 
@@ -81,4 +80,3 @@ if __name__ == '__main__':
         run_with_webhooks()
     else:
         run(run_with_polling())
-    run(Tortoise.close_connections())
