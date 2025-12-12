@@ -1,9 +1,12 @@
 from asyncio import run
 from database.actions import init_db, shutdown_db
-from database.models import User
+from database.models import User, Message
 import logging
 import settings
 import sys
+from pathlib import Path
+from csv import reader
+from datetime import datetime
 
 
 async def add_users() -> None:
@@ -41,11 +44,43 @@ async def add_users() -> None:
         pprint(data)
         pprint(user)
 
+
+async def add_messages_from_csv() -> None:
+    _file = Path(__file__).resolve().parent.parent / 'messages.csv'
+    
+    fields = []
+    
+    with _file.open('r', encoding='utf-8') as _data:
+        for row in reader(_data):
+            if not fields:
+                fields = row
+                continue
+            # "id","text","created_at","from_user_id","to_user_id"
+
+            message_payload = {}
+
+            for field, data in zip(fields, row):
+                if field == 'id':
+                    message_payload[field] = int(data)
+                    continue
+                if field == 'created_at':                 
+                    message_payload[field] = datetime.fromisoformat(data)
+                    continue
+                if field in ('from_user_id', 'to_user_id'):
+                    message_payload[field[:-3]] = await User.get(id=int(data))
+                    continue
+
+                message_payload[field] = data
+            
+            message = await Message.create(**message_payload)
+            print(message)
+
+
 async def main() -> None:
     await init_db()
     
     try:
-        await add_users()
+        await add_messages_from_csv()
     finally:
         await shutdown_db()
 

@@ -21,7 +21,7 @@ async def start(message: Message) -> None:
 
     user = await get_or_create_user(message.from_user)
     
-    if user.confirmed and settings.REGISTRATION_START_DATE <= datetime.now() <= settings.REGISTRATION_END_DATE:
+    if user.confirmed and not settings.REGISTRATION_START_DATE <= datetime.now() <= settings.REGISTRATION_END_DATE:
         await message.answer(text=settings.TEXT_EVENT_STARTED.format(user=await User.get(id=user.secret_user_id)))
         return
 
