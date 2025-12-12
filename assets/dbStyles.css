@@ -5,6 +5,7 @@
 }
 
 .msg {
+    white-space: break-spaces;
     max-width: 70%;
     padding: 10px 14px;
     border-radius: 18px;
