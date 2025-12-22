@@ -5,6 +5,7 @@ from aiogram.types import (
     InlineKeyboardButton as IButton
 )
 import settings
+from random import shuffle
 
 
 start_registration = RMarkup(
@@ -16,6 +17,7 @@ start_registration = RMarkup(
         ],
     ],
 )
+
 
 send_registration_data = RMarkup(
     resize_keyboard=True,
@@ -29,6 +31,56 @@ send_registration_data = RMarkup(
         ],
     ],
 )
+
+
+MAILING_CANCELLED = IMarkup(
+    inline_keyboard=[
+        [
+            IButton(text='❌ Рассылка отменена', callback_data='mailing_pass'),
+        ]
+    ]
+)
+
+
+async def mailing_sent_info_keyboard(
+    ok: int | None = None,
+    fail: int | None = None,
+) -> IMarkup:
+    if ok is None or fail is None:
+        return IMarkup(
+            inline_keyboard=[
+                [
+                    IButton(text='✈️ Идет рассылка', callback_data='mailing_pass'),
+                ]
+            ]
+        )
+    return IMarkup(
+        inline_keyboard=[
+            [
+                IButton(text=f'✅ Отправлено: {ok}', callback_data='mailing_pass'),
+                IButton(text=f'❌ Ошибка: {fail}', callback_data='mailing_pass'),
+            ]
+        ]
+    )
+
+
+async def create_mailing_keyboard() -> IMarkup:
+    buttons = [
+        *(
+            IButton(text=f'{'🙅🚫🙊❌😶'[i]} Отменить', callback_data='cancel_mailing')
+            for i in range(5)
+        ),
+        IButton(text='📤 Отправить', callback_data='send_mailing'),
+    ]
+    shuffle(buttons)
+    
+    return IMarkup(
+        inline_keyboard=[
+            buttons[:3],
+            buttons[3:],
+        ],
+    )
+
 
 async def create_confirm_reject_registration(user_id: int) -> IMarkup:
     return IMarkup(
